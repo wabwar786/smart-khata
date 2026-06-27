@@ -1,0 +1,50 @@
+@baseUrl = http://localhost:8080
+@token = paste-token-here
+@businessId = paste-business-public-id-here
+
+### Health
+GET {{baseUrl}}/health
+
+### Signup
+POST {{baseUrl}}/api/auth/signup
+Content-Type: application/json
+
+{
+  "fullName": "Ahmed Khan",
+  "email": "ahmed@example.com",
+  "phoneNumber": "03001234567",
+  "password": "12345678",
+  "businessName": "Ahmed Mobile Shop",
+  "businessType": "Mobile Shop",
+  "city": "Islamabad"
+}
+
+### Login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "emailOrPhone": "ahmed@example.com",
+  "password": "12345678"
+}
+
+### List businesses
+GET {{baseUrl}}/api/auth/businesses
+Authorization: Bearer {{token}}
+
+### Add customer
+POST {{baseUrl}}/api/customers
+Authorization: Bearer {{token}}
+x-business-id: {{businessId}}
+Content-Type: application/json
+
+{
+  "customerName": "Ali Traders",
+  "phoneNumber": "03001112222",
+  "openingBalance": 0
+}
+
+### List customers
+GET {{baseUrl}}/api/customers
+Authorization: Bearer {{token}}
+x-business-id: {{businessId}}
