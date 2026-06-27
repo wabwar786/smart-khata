@@ -46,3 +46,8 @@ GET /api/admin/dashboard
 ```
 
 Use a super admin JWT token for `/api/admin/*` routes.
+
+
+## Admin user delete
+
+Added `DELETE /api/admin/users/:publicId` for Super Admin. It is a safe soft-delete: `app_users.is_deleted=true`, `is_active=false`, and related `business_users` access is disabled. Historical records are not deleted. The endpoint blocks self-delete and blocks deleting the last active Super Admin.

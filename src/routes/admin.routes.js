@@ -469,6 +469,63 @@ router.patch('/users/:publicId/block', validate(Joi.object({ isActive: Joi.boole
   res.json({ success: true, data: result.rows[0] });
 }));
 
+router.delete('/users/:publicId', asyncHandler(async (req, res) => {
+  const target = await query(
+    `SELECT user_id, public_id, full_name, email, is_super_admin
+     FROM app_users
+     WHERE public_id=$1 AND is_deleted=FALSE`,
+    [req.params.publicId]
+  );
+
+  if (target.rowCount === 0) throw new ApiError(404, 'User not found.');
+
+  const user = target.rows[0];
+
+  if (Number(user.user_id) === Number(req.user.user_id)) {
+    throw new ApiError(400, 'You cannot delete your own logged-in Super Admin account.');
+  }
+
+  if (user.is_super_admin) {
+    const remaining = await query(
+      `SELECT COUNT(*)::int AS total
+       FROM app_users
+       WHERE is_super_admin=TRUE
+         AND is_active=TRUE
+         AND is_deleted=FALSE
+         AND user_id <> $1`,
+      [user.user_id]
+    );
+
+    if (Number(remaining.rows[0].total || 0) < 1) {
+      throw new ApiError(400, 'Cannot delete the last active Super Admin account. Create another Super Admin first.');
+    }
+  }
+
+  await withTransaction(async (client) => {
+    await client.query(
+      `UPDATE app_users
+       SET is_deleted=TRUE, is_active=FALSE, updated_at=NOW()
+       WHERE user_id=$1`,
+      [user.user_id]
+    );
+
+    await client.query(
+      `UPDATE business_users
+       SET is_deleted=TRUE, is_active=FALSE, can_login=FALSE, updated_at=NOW()
+       WHERE user_id=$1 AND is_deleted=FALSE`,
+      [user.user_id]
+    );
+
+    await client.query(
+      `INSERT INTO audit_logs(user_id, action_name, entity_name, entity_id, new_values, created_at)
+       VALUES($1, 'USER_DELETE', 'app_users', $2, $3, NOW())`,
+      [req.user.user_id, user.user_id, JSON.stringify({ deletedUserPublicId: user.public_id, deletedUserEmail: user.email })]
+    );
+  });
+
+  res.json({ success: true, message: 'User deleted successfully. This is a safe soft-delete and historical records are preserved.' });
+}));
+
 router.get('/plans', asyncHandler(async (req, res) => {
   const result = await query(`SELECT plan_id, plan_name, plan_code, monthly_price, currency_code, max_businesses, max_users, max_customers, max_products, max_invoices_per_month, has_inventory, has_quotation, has_reports, has_whatsapp_sharing, has_multi_user, is_active FROM subscription_plans ORDER BY monthly_price, plan_id`);
   res.json({ success: true, data: result.rows });
