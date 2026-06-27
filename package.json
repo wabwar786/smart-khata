@@ -4,6 +4,7 @@
   "private": true,
   "description": "PostgreSQL database migrations for Smart Khata accounting SaaS app",
   "scripts": {
+    "start": "node index.js",
     "db:migrate": "node scripts/migrate.js",
     "migrate": "node scripts/migrate.js"
   },
@@ -13,5 +14,6 @@
   },
   "engines": {
     "node": ">=18"
-  }
+  },
+  "main": "index.js"
 }
