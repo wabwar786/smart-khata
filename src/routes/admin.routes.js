@@ -408,6 +408,49 @@ router.get('/businesses/:publicId/inventory', asyncHandler(async (req, res) => {
   res.json({ success: true, data: result.rows });
 }));
 
+
+router.get('/businesses/:publicId/suppliers', asyncHandler(async (req, res) => {
+  const b = await getBusinessByPublicId(req.params.publicId);
+  const result = await query(`SELECT public_id, supplier_name, phone_number, whatsapp_number, city, opening_balance, current_balance, is_active, created_at FROM suppliers WHERE business_id=$1 AND is_deleted=FALSE ORDER BY created_at DESC LIMIT 500`, [b.business_id]);
+  res.json({ success: true, data: result.rows });
+}));
+
+router.get('/businesses/:publicId/purchases', asyncHandler(async (req, res) => {
+  const b = await getBusinessByPublicId(req.params.publicId);
+  const result = await query(`SELECT public_id, purchase_no, purchase_date, supplier_name_snapshot, grand_total, paid_amount, balance_amount, payment_status, bill_status, created_at FROM purchase_bills WHERE business_id=$1 AND is_deleted=FALSE ORDER BY purchase_date DESC LIMIT 500`, [b.business_id]);
+  res.json({ success: true, data: result.rows });
+}));
+
+router.get('/businesses/:publicId/expenses', asyncHandler(async (req, res) => {
+  const b = await getBusinessByPublicId(req.params.publicId);
+  const result = await query(`SELECT e.public_id, e.expense_date, e.title, e.amount, e.payment_method, e.description, ec.category_name, e.created_at FROM expenses e LEFT JOIN expense_categories ec ON ec.expense_category_id=e.expense_category_id WHERE e.business_id=$1 AND e.is_deleted=FALSE ORDER BY e.expense_date DESC LIMIT 500`, [b.business_id]);
+  res.json({ success: true, data: result.rows });
+}));
+
+router.get('/businesses/:publicId/cashbook', asyncHandler(async (req, res) => {
+  const b = await getBusinessByPublicId(req.params.publicId);
+  const result = await query(`SELECT c.public_id, c.entry_date, c.entry_type, c.amount, c.title, c.description, fa.account_name, fa.account_type, c.created_at FROM cash_book_entries c LEFT JOIN financial_accounts fa ON fa.financial_account_id=c.financial_account_id WHERE c.business_id=$1 AND c.is_deleted=FALSE ORDER BY c.entry_date DESC LIMIT 500`, [b.business_id]);
+  res.json({ success: true, data: result.rows });
+}));
+
+router.get('/businesses/:publicId/staff', asyncHandler(async (req, res) => {
+  const b = await getBusinessByPublicId(req.params.publicId);
+  const result = await query(`SELECT public_id, full_name, phone_number, role_title, salary_type, salary_amount, joining_date, can_login, is_active, created_at FROM staff_members WHERE business_id=$1 AND is_deleted=FALSE ORDER BY full_name LIMIT 500`, [b.business_id]);
+  res.json({ success: true, data: result.rows });
+}));
+
+router.get('/businesses/:publicId/support-tickets', asyncHandler(async (req, res) => {
+  const b = await getBusinessByPublicId(req.params.publicId);
+  const result = await query(`SELECT public_id, subject, message, status, priority, created_at, updated_at FROM support_tickets WHERE business_id=$1 AND is_deleted=FALSE ORDER BY created_at DESC LIMIT 500`, [b.business_id]);
+  res.json({ success: true, data: result.rows });
+}));
+
+router.get('/businesses/:publicId/audit-logs', asyncHandler(async (req, res) => {
+  const b = await getBusinessByPublicId(req.params.publicId);
+  const result = await query(`SELECT action_name, entity_name, entity_id, old_values, new_values, ip_address, created_at FROM audit_logs WHERE business_id=$1 ORDER BY created_at DESC LIMIT 500`, [b.business_id]);
+  res.json({ success: true, data: result.rows });
+}));
+
 router.get('/businesses/:publicId/performance', asyncHandler(async (req, res) => {
   const b = await getBusinessByPublicId(req.params.publicId);
   const [summary, dailySales, topProducts] = await Promise.all([
