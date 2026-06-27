@@ -535,4 +535,103 @@ router.get('/whatsapp/logs', asyncHandler(async (req, res) => {
   res.json({ success: true, data: result.rows });
 }));
 
+// ---------------------------------------------------------
+// Fast POS sale endpoint for mobile app
+// ---------------------------------------------------------
+async function nextInvoiceNo(businessId, client) {
+  let seq = await client.query(
+    `SELECT sequence_id, prefix, next_number FROM document_sequences WHERE business_id=$1 AND document_type='SALE_INVOICE' FOR UPDATE`,
+    [businessId]
+  );
+  if (seq.rowCount === 0) {
+    seq = await client.query(
+      `INSERT INTO document_sequences(business_id, document_type, prefix, next_number) VALUES($1,'SALE_INVOICE','INV',1) RETURNING sequence_id, prefix, next_number`,
+      [businessId]
+    );
+  }
+  const row = seq.rows[0];
+  const no = `${row.prefix}-${String(row.next_number).padStart(5, '0')}`;
+  await client.query(`UPDATE document_sequences SET next_number=next_number+1 WHERE sequence_id=$1`, [row.sequence_id]);
+  return no;
+}
+
+router.post('/pos/sale', asyncHandler(async (req, res) => {
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  if (items.length === 0) throw new ApiError(400, 'At least one sale item is required.');
+  const paymentType = s(req.body.paymentType) || 'CASH';
+  const discountAmount = Math.max(0, n(req.body.discountAmount));
+  const result = await withTransaction(async (client) => {
+    let customerId = null;
+    let customer = null;
+    if (s(req.body.customerPublicId)) {
+      const c = await client.query(`SELECT customer_id, customer_name, phone_number, address, current_balance FROM customers WHERE public_id=$1 AND business_id=$2 AND is_deleted=FALSE LIMIT 1`, [req.body.customerPublicId, req.business.business_id]);
+      if (c.rowCount > 0) { customer = c.rows[0]; customerId = customer.customer_id; }
+    }
+    const invoiceNo = await nextInvoiceNo(req.business.business_id, client);
+    let subtotal = 0;
+    const normalized = [];
+    for (const item of items) {
+      const qty = Math.max(0.001, n(item.qty, 1));
+      const unitPrice = Math.max(0, n(item.unitPrice));
+      let productId = null;
+      let itemName = s(item.itemName) || 'Open Item';
+      let sku = null;
+      if (s(item.productPublicId)) {
+        const p = await client.query(`SELECT product_id, product_name, sku, current_stock FROM products WHERE public_id=$1 AND business_id=$2 AND is_deleted=FALSE LIMIT 1`, [item.productPublicId, req.business.business_id]);
+        if (p.rowCount > 0) { productId = p.rows[0].product_id; itemName = p.rows[0].product_name; sku = p.rows[0].sku; }
+      }
+      const lineTotal = qty * unitPrice;
+      subtotal += lineTotal;
+      normalized.push({ productId, itemName, sku, qty, unitPrice, lineTotal });
+    }
+    const safeDiscount = Math.min(discountAmount, subtotal);
+    const grandTotal = Math.max(0, subtotal - safeDiscount);
+    const paidAmount = paymentType === 'UDHAAR' ? 0 : grandTotal;
+    const balanceAmount = Math.max(0, grandTotal - paidAmount);
+    const invoiceStatus = balanceAmount === 0 ? 'PAID' : paidAmount === 0 ? 'UNPAID' : 'PARTIAL';
+    const inv = await client.query(
+      `INSERT INTO sales_invoices(business_id, customer_id, invoice_no, customer_name_snapshot, customer_phone_snapshot, customer_address_snapshot, sub_total, discount_amount, tax_amount, grand_total, paid_amount, balance_amount, payment_status, invoice_status, notes, terms, created_by)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,0,$9,$10,$11,$12,'POSTED',$13,$14,$15) RETURNING public_id, sales_invoice_id, invoice_no, grand_total, paid_amount, balance_amount, payment_status`,
+      [req.business.business_id, customerId, invoiceNo, customer ? customer.customer_name : s(req.body.customerName) || 'Cash Customer', customer ? customer.phone_number : null, customer ? customer.address : null, subtotal, safeDiscount, grandTotal, paidAmount, balanceAmount, invoiceStatus, s(req.body.invoiceType) || 'POS sale', 'Warranty as per business policy.', req.user.user_id]
+    );
+    const invoiceId = inv.rows[0].sales_invoice_id;
+    for (const item of normalized) {
+      await client.query(
+        `INSERT INTO sales_invoice_items(sales_invoice_id, business_id, product_id, item_name_snapshot, sku_snapshot, qty, unit_price, line_total)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [invoiceId, req.business.business_id, item.productId, item.itemName, item.sku, item.qty, item.unitPrice, item.lineTotal]
+      );
+      if (item.productId) {
+        await client.query(`UPDATE products SET current_stock=GREATEST(current_stock-$2,0) WHERE product_id=$1`, [item.productId, item.qty]);
+        await client.query(
+          `INSERT INTO inventory_transactions(business_id, product_id, transaction_type, qty_out, unit_cost, reference_type, reference_id, notes, created_by)
+           VALUES($1,$2,'SALE',$3,$4,'SALE_INVOICE',$5,'POS sale',$6)`,
+          [req.business.business_id, item.productId, item.qty, item.unitPrice, invoiceId, req.user.user_id]
+        );
+      }
+    }
+    if (customerId && balanceAmount > 0) {
+      const newBalance = n(customer.current_balance) + balanceAmount;
+      await client.query(`UPDATE customers SET current_balance=$2 WHERE customer_id=$1`, [customerId, newBalance]);
+      await client.query(
+        `INSERT INTO customer_ledger(business_id, customer_id, entry_type, reference_type, reference_id, debit_amount, balance_after, description, created_by)
+         VALUES($1,$2,'SALE','SALE_INVOICE',$3,$4,$5,$6,$7)`,
+        [req.business.business_id, customerId, invoiceId, balanceAmount, newBalance, `Invoice ${invoiceNo}`, req.user.user_id]
+      );
+    }
+    if (paidAmount > 0) {
+      const accountId = await defaultAccountId(req.business.business_id, client);
+      await client.query(`UPDATE financial_accounts SET current_balance=current_balance+$2 WHERE financial_account_id=$1`, [accountId, paidAmount]);
+      await client.query(
+        `INSERT INTO cash_book_entries(business_id, financial_account_id, entry_type, amount, title, description, reference_type, reference_id, created_by)
+         VALUES($1,$2,'CASH_IN',$3,$4,$5,'SALE_INVOICE',$6,$7)`,
+        [req.business.business_id, accountId, paidAmount, 'Cash sale', invoiceNo, invoiceId, req.user.user_id]
+      );
+    }
+    await insertAudit(client, req, 'POS_SALE_CREATE', 'sales_invoices', invoiceId, inv.rows[0]);
+    return inv.rows[0];
+  });
+  res.status(201).json({ success: true, data: { publicId: result.public_id, invoiceNo: result.invoice_no, grandTotal: result.grand_total, paidAmount: result.paid_amount, balanceAmount: result.balance_amount, paymentStatus: result.payment_status } });
+}));
+
 module.exports = router;

@@ -1,6 +1,6 @@
 {
   "name": "smart-khata-api",
-  "version": "1.0.5",
+  "version": "1.1.0",
   "private": true,
   "description": "Smart Khata Accounting SaaS backend API for Android app and web admin panel",
   "main": "server.js",

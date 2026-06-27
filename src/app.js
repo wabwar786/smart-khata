@@ -18,6 +18,7 @@ const subscriptionRoutes = require('./routes/subscription.routes');
 const adminRoutes = require('./routes/admin.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
 const completeRoutes = require('./routes/complete.routes');
+const shopRoutes = require('./routes/shop.routes');
 
 const app = express();
 
@@ -54,6 +55,7 @@ app.use('/api/reminders', reminderRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/shop', shopRoutes);
 app.use('/api', completeRoutes);
 
 app.use(notFound);

@@ -22,6 +22,16 @@ const loginSchema = Joi.object({
   password: Joi.string().required(),
 });
 
+const requestOtpSchema = Joi.object({
+  phoneNumber: Joi.string().trim().min(8).max(30).required(),
+  countryCode: Joi.string().trim().max(8).allow('', null),
+});
+
+const verifyOtpSchema = Joi.object({
+  phoneNumber: Joi.string().trim().min(8).max(30).required(),
+  otp: Joi.string().trim().min(4).max(8).required(),
+});
+
 router.post('/signup', validate(signupSchema), asyncHandler(async (req, res) => {
   const result = await authService.signup(req.body);
   res.status(201).json({ success: true, ...result });
@@ -29,6 +39,16 @@ router.post('/signup', validate(signupSchema), asyncHandler(async (req, res) => 
 
 router.post('/login', validate(loginSchema), asyncHandler(async (req, res) => {
   const result = await authService.login(req.body);
+  res.json({ success: true, ...result });
+}));
+
+router.post('/request-otp', validate(requestOtpSchema), asyncHandler(async (req, res) => {
+  const result = await authService.requestOtp(req.body, { ip: req.ip, userAgent: req.headers['user-agent'] });
+  res.json({ success: true, message: 'OTP sent on WhatsApp.', ...result });
+}));
+
+router.post('/verify-otp', validate(verifyOtpSchema), asyncHandler(async (req, res) => {
+  const result = await authService.verifyOtp(req.body);
   res.json({ success: true, ...result });
 }));
 
