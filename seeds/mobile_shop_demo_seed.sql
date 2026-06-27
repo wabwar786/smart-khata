@@ -356,9 +356,14 @@ BEGIN
     END IF;
 
     v_discount := CASE WHEN i % 7 = 0 THEN 500 WHEN i % 11 = 0 THEN 1000 ELSE 0 END;
-    v_total := v_subtotal - v_discount;
+    -- Keep demo discounts realistic and ensure invoice totals never go negative.
+    -- Some accessory invoices are small (e.g. Rs. 900), so a fixed Rs. 1000 discount
+    -- violates ck_sales_invoices_amounts. Cap discount to max 10% of subtotal.
+    v_discount := LEAST(v_discount, ROUND(v_subtotal * 0.10, 2));
+    v_total := GREATEST(v_subtotal - v_discount, 0);
     v_paid := CASE WHEN i % 4 = 0 THEN ROUND(v_total * 0.50, 2) WHEN i % 9 = 0 THEN 0 ELSE v_total END;
-    v_balance := v_total - v_paid;
+    v_paid := LEAST(GREATEST(v_paid, 0), v_total);
+    v_balance := GREATEST(v_total - v_paid, 0);
     v_method := CASE WHEN i % 5 = 0 THEN 'JazzCash' WHEN i % 6 = 0 THEN 'Easypaisa' WHEN i % 4 = 0 THEN 'Bank' ELSE 'Cash' END;
     v_account_id := CASE WHEN v_method='JazzCash' THEN v_jazz_id WHEN v_method='Easypaisa' THEN v_easy_id WHEN v_method='Bank' THEN v_bank_id ELSE v_cash_id END;
 
