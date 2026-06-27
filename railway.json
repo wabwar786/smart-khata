@@ -5,7 +5,7 @@
   },
   "deploy": {
     "startCommand": "npm start",
-    "preDeployCommand": "npm run db:migrate",
+    "preDeployCommand": "npm run db:setup:demo",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 300
   }
