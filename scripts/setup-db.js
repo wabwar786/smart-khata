@@ -9,9 +9,9 @@ function run(command, args) {
 
 run('node', ['scripts/migrate.js']);
 
-const seedEnabled = String(process.env.DEMO_SEED_ENABLED || '').toLowerCase();
-if (['1', 'true', 'yes', 'y'].includes(seedEnabled)) {
+const seedEnabled = String(process.env.DEMO_SEED_ENABLED || 'true').toLowerCase();
+if (!['0', 'false', 'no', 'n', 'off'].includes(seedEnabled)) {
   run('node', ['scripts/seed-mobile-shop-demo.js']);
 } else {
-  console.log('Skipping demo seed. Set DEMO_SEED_ENABLED=true to seed demo data automatically.');
+  console.log('Skipping demo seed because DEMO_SEED_ENABLED=false.');
 }

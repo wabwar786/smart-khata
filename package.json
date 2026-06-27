@@ -1,6 +1,6 @@
 {
   "name": "smart-khata-api",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "private": true,
   "description": "Smart Khata Accounting SaaS backend API for Android app and web admin panel",
   "main": "server.js",
@@ -13,7 +13,7 @@
     "db:seed:demo": "node scripts/seed-mobile-shop-demo.js",
     "db:setup": "node scripts/setup-db.js",
     "db:setup:demo": "npm run db:migrate && npm run db:seed:demo",
-    "start:railway": "npm run db:setup:demo && node server.js"
+    "start:railway": "node scripts/start-railway.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
