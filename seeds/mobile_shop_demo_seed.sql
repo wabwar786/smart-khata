@@ -168,18 +168,19 @@ BEGIN
   VALUES(v_business_id, 'Main Stock Room', 'Back side stock room, Saddar shop', TRUE, TRUE, v_owner_id)
   RETURNING warehouse_id INTO v_warehouse_id;
 
+  -- Insert all demo financial accounts. Do not use multi-row INSERT ... RETURNING INTO a scalar
+  -- variable, because PostgreSQL raises "query returned more than one row".
   INSERT INTO financial_accounts(business_id, account_name, account_type, account_number, opening_balance, current_balance, is_default, is_active, created_by)
   VALUES
   (v_business_id, 'Cash Counter', 'CASH', NULL, 250000, 250000, TRUE, TRUE, v_owner_id),
   (v_business_id, 'Meezan Bank Current', 'BANK', 'PK00-MEEZAN-123456789', 550000, 550000, FALSE, TRUE, v_owner_id),
   (v_business_id, 'JazzCash Business', 'JAZZCASH', '03001234567', 85000, 85000, FALSE, TRUE, v_owner_id),
-  (v_business_id, 'Easypaisa Wallet', 'EASYPAISA', '03001234567', 60000, 60000, FALSE, TRUE, v_owner_id)
-  RETURNING financial_account_id INTO v_temp;
+  (v_business_id, 'Easypaisa Wallet', 'EASYPAISA', '03001234567', 60000, 60000, FALSE, TRUE, v_owner_id);
 
-  SELECT financial_account_id INTO v_cash_id FROM financial_accounts WHERE business_id=v_business_id AND account_name='Cash Counter';
-  SELECT financial_account_id INTO v_bank_id FROM financial_accounts WHERE business_id=v_business_id AND account_name='Meezan Bank Current';
-  SELECT financial_account_id INTO v_jazz_id FROM financial_accounts WHERE business_id=v_business_id AND account_name='JazzCash Business';
-  SELECT financial_account_id INTO v_easy_id FROM financial_accounts WHERE business_id=v_business_id AND account_name='Easypaisa Wallet';
+  SELECT financial_account_id INTO v_cash_id FROM financial_accounts WHERE business_id=v_business_id AND account_name='Cash Counter' ORDER BY financial_account_id LIMIT 1;
+  SELECT financial_account_id INTO v_bank_id FROM financial_accounts WHERE business_id=v_business_id AND account_name='Meezan Bank Current' ORDER BY financial_account_id LIMIT 1;
+  SELECT financial_account_id INTO v_jazz_id FROM financial_accounts WHERE business_id=v_business_id AND account_name='JazzCash Business' ORDER BY financial_account_id LIMIT 1;
+  SELECT financial_account_id INTO v_easy_id FROM financial_accounts WHERE business_id=v_business_id AND account_name='Easypaisa Wallet' ORDER BY financial_account_id LIMIT 1;
 
   INSERT INTO cash_book_entries(business_id, financial_account_id, entry_date, entry_type, amount, title, description, reference_type, created_by)
   VALUES

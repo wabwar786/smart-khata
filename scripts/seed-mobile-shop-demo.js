@@ -36,6 +36,10 @@ async function main() {
 main().catch(async (error) => {
   console.error('Demo seed failed.');
   console.error(error.message);
+  if (error.code) console.error('PostgreSQL error code:', error.code);
+  if (error.detail) console.error('Detail:', error.detail);
+  if (error.position) console.error('SQL position:', error.position);
+  if (error.where) console.error('Where:', error.where);
   try { await client.end(); } catch (_) {}
   process.exit(1);
 });
